@@ -122,21 +122,30 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunksRef.current, { type: mimeType });
-        if (blob.size === 0) return;
+        console.log("Audio blob size:", blob.size);
+        if (blob.size === 0) {
+          console.log("Empty audio blob, skipping");
+          return;
+        }
 
         const formData = new FormData();
         formData.append("audio", blob, "recording.webm");
 
         try {
+          console.log("Sending to edge function...");
           const data = await callFunction("voice-to-text", formData, true);
+          console.log("Edge function response:", data);
           if (data.transcript) {
             setInput(data.transcript);
             if (data.detectedLanguage) {
               setDetectedLanguage(data.detectedLanguage);
             }
+          } else if (data.error) {
+            toast.error(`Voice error: ${data.error}`);
           }
-        } catch {
-          toast.error("Failed to transcribe audio");
+        } catch (error: any) {
+          console.error("Voice error:", error);
+          toast.error(`Voice error: ${error.message || "Unknown error"}`);
         }
       };
 
