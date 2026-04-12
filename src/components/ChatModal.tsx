@@ -110,11 +110,18 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const preferredMimeType = "audio/webm;codecs=opus";
-      const recorder = MediaRecorder.isTypeSupported(preferredMimeType)
-        ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+      const configuredMimeType = MediaRecorder.isTypeSupported(preferredMimeType)
+        ? preferredMimeType
+        : undefined;
+      const recorder = configuredMimeType
+        ? new MediaRecorder(stream, { mimeType: configuredMimeType })
         : new MediaRecorder(stream);
-      const actualMimeType = recorder.mimeType || preferredMimeType;
-      console.log("MediaRecorder initialized with mimeType:", actualMimeType);
+
+      console.log(
+        "MediaRecorder initialized with mimeType:",
+        configuredMimeType ?? recorder.mimeType ?? "browser-default"
+      );
+
       chunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
@@ -123,13 +130,18 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
 
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: actualMimeType });
+        const blobMimeType =
+          chunksRef.current[0]?.type || recorder.mimeType || configuredMimeType || "audio/webm";
+        const blob = new Blob(chunksRef.current, { type: blobMimeType });
+
         console.log("Audio MIME type:", blob.type);
         console.log("Audio blob size:", blob.size);
+
         if (blob.size === 0) {
           console.log("Empty audio blob, skipping");
           return;
         }
+
         if (blob.size > 500000) {
           toast.error("Recording too long, please keep it under 10 seconds");
           return;
@@ -148,6 +160,7 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
             },
             body: formData,
           });
+
           console.log("Response status:", res.status);
           const responseText = await res.text();
           console.log("Response raw text:", responseText);
@@ -164,7 +177,12 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
           console.log("Transcript:", data.transcript);
           console.log("Detected language:", data.detectedLanguage);
 
-          if (data.error === "No speech detected" || !data.transcript) {
+          if (data.error && data.error !== "No speech detected") {
+            toast.error(`Voice error: ${data.error}`);
+            return;
+          }
+
+          if (!data.transcript) {
             toast.error("No speech detected. Please speak clearly and try again.");
             return;
           }
