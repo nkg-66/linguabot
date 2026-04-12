@@ -127,14 +127,30 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
           console.log("Empty audio blob, skipping");
           return;
         }
+        if (blob.size > 500000) {
+          toast.error("Recording too long, please keep it under 10 seconds");
+          return;
+        }
 
         const formData = new FormData();
         formData.append("audio", blob, "recording.webm");
 
         try {
           console.log("Sending to edge function...");
-          const data = await callFunction("voice-to-text", formData, true);
-          console.log("Edge function response:", data);
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/voice-to-text`, {
+            method: "POST",
+            headers: {
+              apikey: ANON_KEY,
+              Authorization: `Bearer ${ANON_KEY}`,
+            },
+            body: formData,
+          });
+          console.log("Response status:", res.status);
+          const responseText = await res.text();
+          console.log("Response raw text:", responseText);
+          const data = JSON.parse(responseText);
+          console.log("Transcript:", data.transcript);
+          console.log("Detected language:", data.detectedLanguage);
           if (data.transcript) {
             setInput(data.transcript);
             if (data.detectedLanguage) {
@@ -156,7 +172,7 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
       // Auto-stop after 60s
       recordingTimerRef.current = setTimeout(() => {
         stopRecording();
-      }, 60000);
+      }, 10000);
     } catch {
       toast.error("Could not access microphone");
     }

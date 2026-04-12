@@ -26,12 +26,17 @@ serve(async (req) => {
 
     console.log("Audio file size:", audioFile.size, "type:", audioFile.type);
 
+    if (audioFile.size > 500000) {
+      return new Response(JSON.stringify({ error: "Audio too large, keep recording under 10 seconds" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const arrayBuffer = await audioFile.arrayBuffer();
     const uint8 = new Uint8Array(arrayBuffer);
-    
-    // Use chunked approach for large arrays to avoid stack overflow
-    let binary = "";
     const chunkSize = 8192;
+    let binary = "";
     for (let i = 0; i < uint8.length; i += chunkSize) {
       const chunk = uint8.subarray(i, i + chunkSize);
       binary += String.fromCharCode(...chunk);
@@ -39,6 +44,7 @@ serve(async (req) => {
     const base64Audio = btoa(binary);
 
     console.log("Base64 audio length:", base64Audio.length);
+    console.log("Calling Gemini...");
 
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
@@ -46,7 +52,7 @@ serve(async (req) => {
     }
 
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -57,23 +63,20 @@ serve(async (req) => {
               { text: "Transcribe this audio exactly as spoken. Then on a new line write LANG: followed by the ISO 639-1 language code only. Output nothing else." },
             ],
           }],
+          generationConfig: { maxOutputTokens: 8192 },
         }),
       }
     );
 
     const geminiData = await geminiRes.json();
-    console.log("Gemini response:", JSON.stringify(geminiData));
+    console.log("Gemini raw response:", JSON.stringify(geminiData));
 
-    const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const geminiText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    console.log("Gemini text output:", geminiText);
 
-    let transcript = rawText.trim();
-    let detectedLanguage = "en";
-
-    const langIdx = rawText.indexOf("LANG:");
-    if (langIdx !== -1) {
-      transcript = rawText.substring(0, langIdx).trim();
-      detectedLanguage = rawText.substring(langIdx + 5).trim().toLowerCase().slice(0, 2);
-    }
+    const langParts = geminiText.split("LANG:");
+    const transcript = langParts[0].trim();
+    const detectedLanguage = langParts[1]?.trim().split("\n")[0].trim().toLowerCase().slice(0, 2) || "en";
 
     console.log("Transcript:", transcript, "Language:", detectedLanguage);
 
