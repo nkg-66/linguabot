@@ -172,7 +172,7 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
       // Auto-stop after 60s
       recordingTimerRef.current = setTimeout(() => {
         stopRecording();
-      }, 60000);
+      }, 10000);
     } catch {
       toast.error("Could not access microphone");
     }
