@@ -15,7 +15,8 @@ serve(async (req) => {
 
   try {
     const formData = await req.formData();
-    const audioFile = formData.get("audio") as File;
+    const audioFile = formData.get("audio") as File | null;
+
     if (!audioFile) {
       console.log("No audio file in request");
       return new Response(JSON.stringify({ error: "No audio file provided" }), {
@@ -34,11 +35,12 @@ serve(async (req) => {
     }
 
     const arrayBuffer = await audioFile.arrayBuffer();
-    const uint8 = new Uint8Array(arrayBuffer);
-    const chunkSize = 8192;
+    const uint8Array = new Uint8Array(arrayBuffer);
+
     let binary = "";
-    for (let i = 0; i < uint8.length; i += chunkSize) {
-      const chunk = uint8.subarray(i, i + chunkSize);
+    const chunkSize = 8192;
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.subarray(i, i + chunkSize);
       binary += String.fromCharCode(...chunk);
     }
     const base64Audio = btoa(binary);
@@ -48,44 +50,90 @@ serve(async (req) => {
 
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY not configured");
+      console.error("GEMINI_API_KEY not set");
+      return new Response(JSON.stringify({ error: "Server configuration error" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: "audio/webm", data: base64Audio } },
-              { text: "Transcribe this audio exactly as spoken. Then on a new line write LANG: followed by the ISO 639-1 language code only. Output nothing else." },
-            ],
-          }],
-          generationConfig: { maxOutputTokens: 8192 },
-        }),
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+    const response = await fetch(geminiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            {
+              inline_data: {
+                mime_type: "audio/webm;codecs=opus",
+                data: base64Audio,
+              },
+            },
+            {
+              text: "Listen to this audio recording carefully. Write down exactly what the person says word for word. After the transcription, write on a new line: LANG: and then the 2-letter ISO language code (like en, hi, fr, es, de, ar, ta, te, bn). If you cannot hear anything or the audio is silent, write SILENT on the first line. Output nothing else.",
+            },
+          ],
+        }],
+        generationConfig: {
+          temperature: 0,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Gemini API error:", response.status, errorText);
+      return new Response(JSON.stringify({ error: `Gemini API error: ${response.status}` }), {
+        status: response.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const result = await response.json();
+
+    console.log("Full Gemini response:", JSON.stringify(result, null, 2));
+    console.log("Finish reason:", result.candidates?.[0]?.finishReason);
+    console.log("Safety ratings:", JSON.stringify(result.candidates?.[0]?.safetyRatings));
+
+    let transcript = "";
+    let detectedLanguage = "en";
+    let errorMessage: string | null = null;
+
+    const content = result.candidates?.[0]?.content?.parts?.[0]?.text as string | undefined;
+    const finishReason = result.candidates?.[0]?.finishReason as string | undefined;
+
+    if (content) {
+      const lines = content.trim().split("\n");
+      transcript = lines[0]?.trim() || "";
+      if (lines.length > 1 && lines[1].startsWith("LANG:")) {
+        detectedLanguage = lines[1].substring(5).trim().toLowerCase().slice(0, 2) || "en";
       }
-    );
+    }
 
-    const geminiData = await geminiRes.json();
-    console.log("Gemini raw response:", JSON.stringify(geminiData));
+    if (!transcript || transcript === "SILENT" || finishReason === "SAFETY" || finishReason === "MAX_TOKENS") {
+      if (finishReason === "SAFETY") {
+        errorMessage = "Content filtered by safety settings.";
+      } else if (finishReason === "MAX_TOKENS") {
+        errorMessage = "Response truncated due to token limit.";
+      } else {
+        errorMessage = "No speech detected";
+      }
 
-    const geminiText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    console.log("Gemini text output:", geminiText);
+      return new Response(JSON.stringify({ transcript: "", detectedLanguage: "en", error: errorMessage }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    const langParts = geminiText.split("LANG:");
-    const transcript = langParts[0].trim();
-    const detectedLanguage = langParts[1]?.trim().split("\n")[0].trim().toLowerCase().slice(0, 2) || "en";
-
-    console.log("Transcript:", transcript, "Language:", detectedLanguage);
-
-    return new Response(JSON.stringify({ transcript, detectedLanguage }), {
+    return new Response(JSON.stringify({ transcript, detectedLanguage, error: null }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
-    console.error("voice-to-text error:", e);
-    return new Response(JSON.stringify({ error: e.message || "Unknown error" }), {
+  } catch (error) {
+    console.error("Error processing request:", error);
+    return new Response(JSON.stringify({ error: `Internal server error: ${error instanceof Error ? error.message : "Unknown error"}` }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
