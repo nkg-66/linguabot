@@ -2,16 +2,20 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
+  console.log("Function called, method:", req.method);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const { text, fromLang, toLang } = await req.json();
+    console.log("Translate request:", fromLang, "->", toLang, "text length:", text?.length);
 
     if (!text || !fromLang || !toLang) {
       return new Response(JSON.stringify({ error: "Missing text, fromLang, or toLang" }), {
@@ -47,6 +51,7 @@ serve(async (req) => {
     );
 
     const geminiData = await geminiRes.json();
+    console.log("Gemini response:", JSON.stringify(geminiData));
     const translatedText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || text;
 
     return new Response(JSON.stringify({ translatedText }), {
