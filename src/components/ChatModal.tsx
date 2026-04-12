@@ -184,12 +184,16 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
       setRecording(true);
 
       recordingTimerRef.current = setTimeout(() => {
-        stopRecording();
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+          mediaRecorderRef.current.stop();
+        }
+        mediaRecorderRef.current = null;
+        setRecording(false);
       }, 10000);
     } catch {
       toast.error("Could not access microphone");
     }
-  }, [stopRecording]);
+  }, []);
 
   const stopRecording = useCallback(() => {
     if (recordingTimerRef.current) {
