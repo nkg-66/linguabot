@@ -5,10 +5,14 @@
     return;
   }
 
-  const API_URL = "https://lttwuobnufpjvlirpndn.supabase.co/functions/v1/chat";
-  const VOICE_URL = "https://lttwuobnufpjvlirpndn.supabase.co/functions/v1/voice-to-text";
-  const TRANSLATE_URL = "https://lttwuobnufpjvlirpndn.supabase.co/functions/v1/translate-message";
+  const SUPA_BASE = "https://lttwuobnufpjvlirpndn.supabase.co/functions/v1";
+  const API_URL = SUPA_BASE + "/chat";
+  const VOICE_URL = SUPA_BASE + "/voice-to-text";
+  const TRANSLATE_URL = SUPA_BASE + "/translate-message";
+  const CONFIG_URL = SUPA_BASE + "/get-widget-config";
   const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0dHd1b2JudWZwanZsaXJwbmRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxOTc5NzAsImV4cCI6MjA5MDc3Mzk3MH0.jzPjDvkH47QjBFXsRUSRaL98MuitCostqWeZcufdchE";
+
+  let WIDGET_CONFIG = { bot_name: "Chatbot", primary_color: "#6c63ff", greeting_message: "" };
 
   const LANG_MAP = {
     hi:"hi-IN",fr:"fr-FR",es:"es-ES",de:"de-DE",ar:"ar-SA",
