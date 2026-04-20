@@ -316,6 +316,7 @@
 
         var fd = new FormData();
         fd.append("audio", blob, "recording.webm");
+        fd.append("embed_key", EMBED_KEY);
 
         fetch(VOICE_URL, {
           method: "POST",
