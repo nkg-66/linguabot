@@ -5,10 +5,14 @@
     return;
   }
 
-  const API_URL = "https://lttwuobnufpjvlirpndn.supabase.co/functions/v1/chat";
-  const VOICE_URL = "https://lttwuobnufpjvlirpndn.supabase.co/functions/v1/voice-to-text";
-  const TRANSLATE_URL = "https://lttwuobnufpjvlirpndn.supabase.co/functions/v1/translate-message";
+  const SUPA_BASE = "https://lttwuobnufpjvlirpndn.supabase.co/functions/v1";
+  const API_URL = SUPA_BASE + "/chat";
+  const VOICE_URL = SUPA_BASE + "/voice-to-text";
+  const TRANSLATE_URL = SUPA_BASE + "/translate-message";
+  const CONFIG_URL = SUPA_BASE + "/get-widget-config";
   const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0dHd1b2JudWZwanZsaXJwbmRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxOTc5NzAsImV4cCI6MjA5MDc3Mzk3MH0.jzPjDvkH47QjBFXsRUSRaL98MuitCostqWeZcufdchE";
+
+  let WIDGET_CONFIG = { bot_name: "Chatbot", primary_color: "#6c63ff", greeting_message: "" };
 
   const LANG_MAP = {
     hi:"hi-IN",fr:"fr-FR",es:"es-ES",de:"de-DE",ar:"ar-SA",
@@ -29,7 +33,7 @@
     #lb-widget-btn {
       position:fixed;bottom:24px;right:24px;z-index:99999;
       width:56px;height:56px;border-radius:50%;border:none;
-      background:#6c63ff;color:#fff;cursor:pointer;
+      background:var(--lb-primary, #6c63ff);color:#fff;cursor:pointer;
       box-shadow:0 4px 14px rgba(108,99,255,0.4);
       display:flex;align-items:center;justify-content:center;transition:transform 0.2s;
     }
@@ -45,7 +49,7 @@
     }
     #lb-widget-window.open{display:flex;}
     #lb-header{
-      background:#6c63ff;color:#fff;padding:16px;
+      background:var(--lb-primary, #6c63ff);color:#fff;padding:16px;
       font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;
     }
     #lb-header .lb-lang-pill{
@@ -63,7 +67,7 @@
       font-size:14px;line-height:1.45;word-wrap:break-word;
     }
     .lb-msg.user{
-      background:#6c63ff;color:#fff;border-bottom-right-radius:4px;
+      background:var(--lb-primary, #6c63ff);color:#fff;border-bottom-right-radius:4px;
     }
     .lb-msg.bot{
       background:#f0f0f5;color:#1a1a2e;border-bottom-left-radius:4px;
@@ -78,11 +82,11 @@
       background:none;border:none;cursor:pointer;padding:2px;
       color:#999;display:flex;align-items:center;
     }
-    .lb-speak-btn:hover{color:#6c63ff;}
+    .lb-speak-btn:hover{color:var(--lb-primary, #6c63ff);}
     .lb-speak-btn svg{width:14px;height:14px;}
     .lb-dots{display:flex;gap:4px;padding:10px 14px;align-self:flex-start;}
     .lb-dots span{
-      width:8px;height:8px;border-radius:50%;background:#6c63ff;
+      width:8px;height:8px;border-radius:50%;background:var(--lb-primary, #6c63ff);
       animation:lb-bounce 1.4s infinite both;
     }
     .lb-dots span:nth-child(2){animation-delay:0.16s;}
@@ -96,9 +100,9 @@
       flex:1;border:1px solid #ddd;border-radius:8px;
       padding:8px 12px;font-size:14px;outline:none;font-family:inherit;
     }
-    #lb-input:focus{border-color:#6c63ff;}
+    #lb-input:focus{border-color:var(--lb-primary, #6c63ff);}
     #lb-send,#lb-mic{
-      background:#6c63ff;color:#fff;border:none;
+      background:var(--lb-primary, #6c63ff);color:#fff;border:none;
       border-radius:8px;padding:8px 12px;cursor:pointer;
       font-weight:600;font-size:14px;display:flex;align-items:center;justify-content:center;
     }
@@ -133,7 +137,7 @@
   const win = document.createElement("div");
   win.id = "lb-widget-window";
   win.innerHTML =
-    '<div id="lb-header"><span style="flex:1">LinguaBot</span><span id="lb-header-lang" class="lb-lang-pill" style="display:none"></span></div>' +
+    '<div id="lb-header"><span id="lb-header-name" style="flex:1">Chatbot</span><span id="lb-header-lang" class="lb-lang-pill" style="display:none"></span></div>' +
     '<div id="lb-messages"></div>' +
     '<div id="lb-input-area">' +
       '<input id="lb-input" placeholder="Type or use mic..." />' +
@@ -147,6 +151,29 @@
   const sendBtn = win.querySelector("#lb-send");
   const micBtn = win.querySelector("#lb-mic");
   const headerLang = win.querySelector("#lb-header-lang");
+  const headerName = win.querySelector("#lb-header-name");
+
+  // Fetch config (bot name, color, greeting) by embed_key
+  fetch(CONFIG_URL + "?embed_key=" + encodeURIComponent(EMBED_KEY), {
+    headers: { apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY },
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (cfg) {
+      if (cfg && !cfg.error) {
+        WIDGET_CONFIG = Object.assign(WIDGET_CONFIG, cfg);
+        if (cfg.bot_name) {
+          headerName.textContent = cfg.bot_name;
+          btn.title = cfg.bot_name;
+        }
+        if (cfg.primary_color) {
+          document.documentElement.style.setProperty("--lb-primary", cfg.primary_color);
+        }
+        if (cfg.greeting_message) {
+          addMsg(cfg.greeting_message, "bot", "en");
+        }
+      }
+    })
+    .catch(function (e) { console.warn("LinguaBot config load failed", e); });
 
   function updateLangDisplay() {
     if (detectedLanguage !== "en") {

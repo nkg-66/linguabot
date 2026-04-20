@@ -1,1 +1,10 @@
 project_id = "lttwuobnufpjvlirpndn"
+
+[functions.voice-to-text]
+verify_jwt = false
+
+[functions.translate-message]
+verify_jwt = false
+
+[functions.get-widget-config]
+verify_jwt = false
