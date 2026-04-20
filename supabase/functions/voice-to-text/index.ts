@@ -155,8 +155,8 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error processing request:", error);
-    return new Response(JSON.stringify({ error: `Internal server error: ${error instanceof Error ? error.message : "Unknown error"}` }), {
+    console.error("[voice-to-text] unhandled:", error);
+    return new Response(JSON.stringify({ error: "An unexpected error occurred. Please try again." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
