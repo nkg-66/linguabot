@@ -253,7 +253,7 @@
       var res = await fetch(TRANSLATE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY },
-        body: JSON.stringify({ text: text, fromLang: fromLang, toLang: toLang }),
+        body: JSON.stringify({ text: text, fromLang: fromLang, toLang: toLang, embed_key: EMBED_KEY }),
       });
       var data = await res.json();
       return data.translatedText || text;
