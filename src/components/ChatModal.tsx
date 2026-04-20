@@ -60,7 +60,7 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
   const translateText = async (text: string, fromLang: string, toLang: string): Promise<string> => {
     if (fromLang === toLang) return text;
     try {
-      const data = await callFunction("translate-message", { text, fromLang, toLang });
+      const data = await callFunction("translate-message", { text, fromLang, toLang, embed_key: config.embed_key });
       return data.translatedText || text;
     } catch {
       return text;
@@ -149,6 +149,7 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
 
         const formData = new FormData();
         formData.append("audio", blob, "recording.webm");
+        formData.append("embed_key", config.embed_key);
 
         try {
           console.log("Sending to edge function...");

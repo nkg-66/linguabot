@@ -19,11 +19,24 @@ const Admin = () => {
   const [detail, setDetail] = useState<ChatbotConfig | null>(null);
 
   useEffect(() => {
-    if (user?.email !== "admin@linguabot.com") {
-      navigate("/");
+    if (!user) {
+      navigate("/auth");
       return;
     }
-    fetchAll();
+    (async () => {
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (error || !data) {
+        toast.error("Admin access required");
+        navigate("/");
+        return;
+      }
+      fetchAll();
+    })();
   }, [user, navigate]);
 
   const fetchAll = async () => {
