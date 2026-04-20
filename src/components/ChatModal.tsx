@@ -149,6 +149,7 @@ export function ChatModal({ config, onClose }: { config: ChatbotConfig; onClose:
 
         const formData = new FormData();
         formData.append("audio", blob, "recording.webm");
+        formData.append("embed_key", config.embed_key);
 
         try {
           console.log("Sending to edge function...");
