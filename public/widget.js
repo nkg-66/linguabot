@@ -151,6 +151,29 @@
   const sendBtn = win.querySelector("#lb-send");
   const micBtn = win.querySelector("#lb-mic");
   const headerLang = win.querySelector("#lb-header-lang");
+  const headerName = win.querySelector("#lb-header-name");
+
+  // Fetch config (bot name, color, greeting) by embed_key
+  fetch(CONFIG_URL + "?embed_key=" + encodeURIComponent(EMBED_KEY), {
+    headers: { apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY },
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (cfg) {
+      if (cfg && !cfg.error) {
+        WIDGET_CONFIG = Object.assign(WIDGET_CONFIG, cfg);
+        if (cfg.bot_name) {
+          headerName.textContent = cfg.bot_name;
+          btn.title = cfg.bot_name;
+        }
+        if (cfg.primary_color) {
+          document.documentElement.style.setProperty("--lb-primary", cfg.primary_color);
+        }
+        if (cfg.greeting_message) {
+          addMsg(cfg.greeting_message, "bot", "en");
+        }
+      }
+    })
+    .catch(function (e) { console.warn("LinguaBot config load failed", e); });
 
   function updateLangDisplay() {
     if (detectedLanguage !== "en") {
