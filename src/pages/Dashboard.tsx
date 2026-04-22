@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-const WIDGET_SCRIPT_VERSION = "20260422-dynamic-ui-match";
+
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
