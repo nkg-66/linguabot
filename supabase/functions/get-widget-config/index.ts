@@ -45,7 +45,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify(data), {
+    const responseData = {
+      ...data,
+      theme_color: data.primary_color,
+      voice_enabled: true,
+      ui_variant: "app-chat-modal",
+    };
+
+    return new Response(JSON.stringify(responseData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

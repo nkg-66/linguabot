@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-const WIDGET_SCRIPT_VERSION = "20260422-dynamic-ui-match";
+
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
@@ -46,7 +46,7 @@ const Dashboard = () => {
   };
 
   const embedCode = config
-    ? `<script>\n  window.ChatbotKey = "${config.embed_key}";\n</script>\n<script src="https://linguabot.lovable.app/widget.js?v=${WIDGET_SCRIPT_VERSION}" async></script>`
+    ? `<script>\n  window.ChatbotKey = "${config.embed_key}";\n</script>\n<script src="https://linguabot.lovable.app/widget.js" async></script>`
     : "";
 
   const copyEmbed = () => {
