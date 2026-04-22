@@ -8,6 +8,42 @@ const corsHeaders = {
 };
 
 const ALLOWED_AUDIO_MIMES = ["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/wav", "audio/x-wav"];
+const TRANSIENT_UPSTREAM_MESSAGE = "Voice transcription is temporarily busy. Please try again in a few seconds.";
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callGeminiWithRetry(geminiUrl: string, payload: unknown) {
+  const maxAttempts = 3;
+  let lastStatus = 500;
+  let lastErrorText = "";
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    console.log(`Calling Gemini (attempt ${attempt}/${maxAttempts})...`);
+
+    const response = await fetch(geminiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      return { ok: true as const, response };
+    }
+
+    lastStatus = response.status;
+    lastErrorText = await response.text();
+    console.error("Gemini API error:", response.status, lastErrorText);
+
+    const retryable = response.status === 429 || response.status >= 500;
+    if (!retryable || attempt === maxAttempts) {
+      break;
+    }
+
+    await sleep(700 * attempt);
+  }
+
+  return { ok: false as const, status: lastStatus, errorText: lastErrorText };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -21,7 +57,8 @@ serve(async (req) => {
 
     if (!embed_key) {
       return new Response(JSON.stringify({ error: "Missing embed_key" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -35,7 +72,8 @@ serve(async (req) => {
     const baseMime = (audioFile.type || "").split(";")[0].trim().toLowerCase();
     if (baseMime && !ALLOWED_AUDIO_MIMES.includes(baseMime)) {
       return new Response(JSON.stringify({ error: `Unsupported audio type: ${baseMime}` }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -48,12 +86,13 @@ serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
     const { data: keyOk } = await supabase.rpc("embed_key_exists", { _embed_key: embed_key });
     if (!keyOk) {
       return new Response(JSON.stringify({ error: "Invalid embed_key" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -69,7 +108,6 @@ serve(async (req) => {
     const base64Audio = btoa(binary);
 
     console.log("Base64 audio length:", base64Audio.length);
-    console.log("Calling Gemini...");
 
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
@@ -81,40 +119,48 @@ serve(async (req) => {
     }
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const audioMimeType = audioFile.type || "audio/webm";
 
-    const response = await fetch(geminiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            {
-              inline_data: {
-                mime_type: "audio/webm;codecs=opus",
-                data: base64Audio,
-              },
+    const geminiResult = await callGeminiWithRetry(geminiUrl, {
+      contents: [{
+        parts: [
+          {
+            inline_data: {
+              mime_type: audioMimeType,
+              data: base64Audio,
             },
-            {
-              text: "Listen to this audio recording carefully. Write down exactly what the person says word for word. After the transcription, write on a new line: LANG: and then the 2-letter ISO language code (like en, hi, fr, es, de, ar, ta, te, bn). If you cannot hear anything or the audio is silent, write SILENT on the first line. Output nothing else.",
-            },
-          ],
-        }],
-        generationConfig: {
-          temperature: 0,
-        },
-      }),
+          },
+          {
+            text: "Listen to this audio recording carefully. Write down exactly what the person says word for word. After the transcription, write on a new line: LANG: and then the 2-letter ISO language code (like en, hi, fr, es, de, ar, ta, te, bn). If you cannot hear anything or the audio is silent, write SILENT on the first line. Output nothing else.",
+          },
+        ],
+      }],
+      generationConfig: {
+        temperature: 0,
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
-      return new Response(JSON.stringify({ error: `Gemini API error: ${response.status}` }), {
-        status: response.status,
+    if (!geminiResult.ok) {
+      const isTransient = geminiResult.status === 429 || geminiResult.status >= 500;
+
+      if (isTransient) {
+        return new Response(JSON.stringify({
+          transcript: "",
+          detectedLanguage: "en",
+          error: TRANSIENT_UPSTREAM_MESSAGE,
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ error: "Voice transcription failed. Please try again." }), {
+        status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const result = await response.json();
+    const result = await geminiResult.response.json();
 
     console.log("Full Gemini response:", JSON.stringify(result, null, 2));
     console.log("Finish reason:", result.candidates?.[0]?.finishReason);
