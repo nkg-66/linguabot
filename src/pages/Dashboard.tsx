@@ -46,7 +46,7 @@ const Dashboard = () => {
   };
 
   const embedCode = config
-    ? `<script>\n  window.ChatbotKey = "${config.embed_key}";\n</script>\n<script src="https://linguabot.lovable.app/widget.js?v=${WIDGET_SCRIPT_VERSION}" async></script>`
+    ? `<script>\n  window.ChatbotKey = "${config.embed_key}";\n</script>\n<script src="https://linguabot.lovable.app/widget.js" async></script>`
     : "";
 
   const copyEmbed = () => {
